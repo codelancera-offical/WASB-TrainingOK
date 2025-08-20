@@ -1,0 +1,26 @@
+defaults:
+  - _self_
+  - runner: train
+  - dataset: tennis
+  - model: wasb
+  - detector: tracknetv2
+  - dataloader: default
+  - loss: hm_mse
+  - optimizer: adam_multistep
+  - transform: default
+
+hydra:
+  run:
+    dir: /root/outputs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+
+output_dir:
+
+# dataloader:
+#   train: True
+#   test: False
+#   train_clip: False
+#   test_clip: False
+
+seed: 1234
+
+
