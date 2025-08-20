@@ -1,41 +1,76 @@
-# WASB: Widely Applicable Strong Baseline for Sports Ball Detection and Tracking
+# WASB-TrainingOK
 
-Code & dataset repository for the paper: **[Widely Applicable Strong Baseline for Sports Ball Detection and Tracking](https://arxiv.org/abs/2311.05237)**
+这里是WASB的训练实现代码，由于原论文没有公开训练代码，所以我自己手搓了一个，在自己实现训练代码的过程中我主要解决了如下问题：
+- dockerfile，解决镜像软件源连接问题
+- `src/configs/dataset/tennis.yaml`， 修改数据集指向路径：`/root/datasets -> /root/src/datasets。` 解决源代码训练路径错误问题
+- 在 `src/configs/dataloader.yaml` 明确：`train: True`，解决源代码训练时每个 `epoch 0it、loss=0`的问题
+- 修改`src/losses/heatmap.py`, 对 MSE 按尺度逐个计算并累加；其他损失保持字典输入 ，解决源代码损失函数类型不匹配导致训练中断的问题
+- 修改`src/runners/runner_utils.py`，将`src/runners/runner_utils.py` 取 `batch_size = next(iter(preds.values())).size(0)`；并 `imgs = imgs.to(device)`。解决 源代码`preds[0]` 报错,潜在设备不一致,批大小获取方式错误/数据不在设备上等问题
 
-Shuhei Tarashima, Muhammad Abdul Haq, Yushan Wang, Norio Tagawa
+下面是我调通之后的开启训练过程，直接按照我下面步骤执行即可开始训练。
+# 1. 环境搭建
 
-[![arXiv](https://img.shields.io/badge/arXiv-2311.05237-00ff00.svg)](https://arxiv.org/abs/2311.05237) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) ![test](https://img.shields.io/static/v1?label=By&message=Pytorch&color=red)
-
-We present Widely Applicable Strong Baseline (WASB), a Sports Ball Detection and Tracking (SBDT) baseline that can be applied to wide range of sports categories :soccer: :tennis: :badminton: :volleyball: :basketball: .
-
-https://github.com/nttcom/WASB-SBDT/assets/63090948/8889ef53-62c7-4c97-9b33-8bf386489ba1
-
-## News
-
-- [11/23/2023] [Our BMVC2023 proceeding](https://proceedings.bmvc2023.org/310/) is available! Thank you, BMVC2023 organizers!
-- [11/23/2023] Evaluation codes of DeepBall, DeepBall-Large and BallSeg are added!
-- [11/21/2023] Evaluation codes of TrackNetV2, ResTrackNetV2 and MonoTrack are added!
-- [11/17/2023] Repository is released. Now it contains evaluation codes of pretrained WASB models only. Other models will be coming soon!
-- [11/09/2023] Our [arXiv preprint](https://arxiv.org/abs/2311.05237) is released.
-
-## Installation and Setup
-
-Tested with Python3.8, CUDA11.3 on Ubuntu 18.04 (4 V100 GPUs inside). We recommend to use the [Dockerfile](./Dockerfile) provided in this repo (with ```-it``` option when running the container). 
-
-- See [GET_STARTED.md](./GET_STARTED.md) for how to get started with SBDT models.
-- See [MODEL_ZOO.md](./MODEL_ZOO.md) for available model weights.
-
-## Citation
-
-If you find this work useful, please consider to cite our paper:
-
-```
-@inproceedings{tarashima2023wasb,
-	title={Widely Applicable Strong Baseline for Sports Ball Detection and Tracking},
-	author={Tarashima, Shuhei and Haq, Muhammad Abdul and Wang, Yushan and Tagawa, Norio},
-	booktitle={BMVC},
-	year={2023}
-}
+克隆仓库并构建镜像
+```sh
+git clone https://github.com/codelancera-offical/WASB-TrainingOK.git
+cd WASB-TrainingOK
+docker built -t wasb:1.0 .
 ```
 
+# 2. 准备数据集
 
+## 使用Tracknet的tennis数据集
+
+[在这儿下载数据集](https://nycu1-my.sharepoint.com/:u:/g/personal/tik_m365_nycu_edu_tw/ETCr6-M0e1VDhGCdMbvljcsBu31AJTO5xa_1cW8pHa7niA?e=55tLJ9) 然后把它重命名为tennis放到src/datasets目录下，具体结构如下所示：
+
+```python
+    datasets
+    |-----soccer
+    |        └-----videos
+    |        └-----frames
+    |        └-----annos
+    └-----tennis /* renamed from Dataset */
+    |        └-----game1
+    |        └-----...
+    |        └-----game10
+    └-----badminton 
+    |        └-----match1
+    |        └-----...
+    |        └-----match26
+    |        └-----test_match1
+    |        └-----...
+    |        └-----test_match3
+    └-----volleyball
+    |        └-----videos
+    |        └-----volleyball_ball_annotation
+    └-----basketball /* renamed from NBA_data */
+    |        └-----videos
+    |        └-----ball-annos
+    |
+    src
+```
+
+
+
+# 3. 启动容器
+
+- 这里我指定共享内存为8g，要是你内存多随便造。
+- \<到WASB所在文件夹的路径\> 得你自己改好
+```sh
+docker run --gpus all --shm-size=8g -d -v <到WASB所在文件夹的路径>\WASB-SBDT\src:/root/src --name wasb-container wasb:1.0 tail -f /dev/null
+
+docker exec -it wasb-container bash
+```
+
+# 4. 开启训练
+
+```python
+python3 main.py --config-name=train dataset=tennis
+```
+
+
+# 5. 使用自己定义数据集（网球）
+你可以直接把你的数据集按照game的单位打包，然后替换或者追加到tennis中，保证符合如下格式即可：
+
+![](./dataset_structure.png)
+![](./annotation_standard.png)
